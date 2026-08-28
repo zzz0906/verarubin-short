@@ -65,6 +65,95 @@
       line-height: 1.25;
     }
     .question { margin: 0 0 18px; color: var(--muted); }
+    .mechanism {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-top: 18px;
+      align-items: stretch;
+    }
+    .mechanism .step {
+      position: relative;
+      padding: 14px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbf8ef;
+      font-size: 13px;
+    }
+    .mechanism .step:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      right: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--gold);
+      font-weight: 900;
+      background: var(--card);
+    }
+    .mechanism b { display: block; margin-bottom: 4px; color: var(--green); }
+    .format {
+      margin-top: 17px;
+      padding: 14px 16px;
+      border-radius: 8px;
+      background: #f0ede3;
+      color: #49463e;
+      font-size: 14px;
+    }
+    .algo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 14px 0 18px; }
+    .algo {
+      padding: 14px 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbf8ef;
+      font-size: 14px;
+    }
+    .algo b { color: var(--green); }
+    figure {
+      margin: 20px 0 0;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fffef9;
+    }
+    figcaption { margin-bottom: 13px; }
+    .fig-label {
+      display: block;
+      color: var(--gold);
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .fig-title { display: block; margin-top: 2px; font-family: Georgia, "Times New Roman", serif; font-size: 20px; }
+    .legend { display: flex; gap: 16px; margin: 8px 0 13px; color: var(--muted); font-size: 12px; }
+    .dot { display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; }
+    .dot.good-dot { background: var(--green); }
+    .dot.bad-dot { background: var(--red); }
+    .ratio-chart { display: grid; gap: 12px; }
+    .ratio-row { display: grid; grid-template-columns: 150px 1fr; gap: 12px; align-items: center; }
+    .ratio-model { font-size: 13px; font-weight: 750; }
+    .ratio-bars { display: grid; gap: 5px; }
+    .track { height: 20px; border-radius: 5px; background: #ece7da; overflow: visible; }
+    .fill {
+      height: 100%;
+      min-width: 48px;
+      padding: 2px 7px;
+      border-radius: 5px;
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .fill.good-bar { background: var(--green); }
+    .fill.bad-bar { background: var(--red); }
+    .axis { margin: 8px 0 0 162px; display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; }
+    .kv-story { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 10px; align-items: stretch; }
+    .kv-box { padding: 14px; border: 1px solid var(--line); border-radius: 8px; text-align: center; }
+    .kv-box b { display: block; font-size: 21px; font-family: Georgia, "Times New Roman", serif; }
+    .kv-box.good-box { border-color: #88b4aa; background: #f0f7f3; }
+    .kv-box.bad-box { border-color: #d5a29c; background: #fbf0ee; }
+    .arrow { align-self: center; color: var(--gold); font-size: 21px; font-weight: 900; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; font-size: 14px; }
     th, td { padding: 11px 10px; border-bottom: 1px solid #e9e3d4; text-align: right; white-space: nowrap; }
@@ -102,6 +191,13 @@
       main { padding-top: 34px; }
       section { padding: 18px; }
       .proof { grid-template-columns: 1fr; }
+      .mechanism { grid-template-columns: 1fr; }
+      .mechanism .step:not(:last-child)::after { content: "↓"; top: auto; bottom: -14px; right: 50%; transform: translateX(50%); }
+      .algo-grid { grid-template-columns: 1fr; }
+      .ratio-row { grid-template-columns: 1fr; gap: 5px; }
+      .axis { margin-left: 0; }
+      .kv-story { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); justify-self: center; }
       th, td { padding: 9px 7px; }
     }
   </style>
@@ -123,42 +219,113 @@
   </header>
 
   <section>
+    <h2>What the algorithm actually does</h2>
+    <p class="question">
+      LUT-B is a compressed matrix-B format, not ordinary integer arithmetic.
+      We turn each weight or cached K/V tile into a small programmable lookup table.
+    </p>
+    <div class="mechanism">
+      <div class="step"><b>1 · Condition</b>Optionally rotate or rescale the tensor to reduce outliers.</div>
+      <div class="step"><b>2 · Fit</b>Learn eight E4M3 reconstruction values for each tile.</div>
+      <div class="step"><b>3 · Correct</b>Optionally use RMS², Fisher, or GPTQ to protect important errors.</div>
+      <div class="step"><b>4 · Pack</b>Store 3-bit indices, the 8-value LUT, and UE8M0 scales.</div>
+      <div class="step"><b>5 · Execute</b>Rubin looks up B inside the MMA; A remains E4M3.</div>
+    </div>
+    <div class="format">
+      One K64×N8 tile contains 512 three-bit indices (192 B), one eight-entry E4M3 LUT (8 B),
+      and scale metadata: about <strong>3.2 bits per weight</strong>. No dense BF16 weight is materialized
+      in the native path.
+    </div>
+  </section>
+
+  <section>
     <h2>Experiment 1 — 3-bit weights</h2>
     <p class="question">Does native W3A8 preserve language-model quality across three architectures?</p>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>Model · 8K WikiText-2</th>
-            <th>BF16 PPL / KL₅₀</th>
-            <th>Best measured native W3A8</th>
-            <th>Native uniform W3A8</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Qwen3-4B</td>
-            <td>9.447 / 0</td>
-            <td class="good">11.538 / 0.23758</td>
-            <td class="bad">91.618 / 2.26101</td>
-          </tr>
-          <tr>
-            <td>Gemma4-12B</td>
-            <td>6.479 / 0</td>
-            <td class="good">7.842 / 0.36278</td>
-            <td class="bad">10,070.909 / 7.32568</td>
-          </tr>
-          <tr>
-            <td>MiniMax-M3 routed experts</td>
-            <td>5.303 / 0</td>
-            <td class="good">6.124 / 0.30928</td>
-            <td class="bad">640,419 / 12.17143</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="algo-grid">
+      <div class="algo">
+        <b>Qwen and Gemma: H64 + GPTQ.</b>
+        A signed K64 Hadamard rotation spreads weight outliers. Lloyd–Max fits the eight LUT values;
+        GPTQ uses a block Hessian to push each quantization error into columns not yet quantized.
+        The matching H64 transform is applied to A at runtime.
+      </div>
+      <div class="algo">
+        <b>MiniMax: RMS²-weighted Lloyd–Max.</b>
+        Each centroid fit weights a channel by its calibrated activation second moment.
+        Two independently scaled K32 halves plus one tensor-global scale handle local dynamic range.
+        Only routed-expert W13/W2 matrices are quantized.
+      </div>
     </div>
     <p class="note">
-      Qwen and Gemma use H64 + GPTQ; MiniMax uses RMS²-weighted Lloyd–Max with two-K32 scales.
+      SqueezeLLM is a separate variant: it weights the same codebook fit with diagonal Fisher information.
+      It does not perform GPTQ's sequential error compensation unless the two methods are explicitly combined.
+    </p>
+    <figure>
+      <figcaption>
+        <span class="fig-label">Figure 1 · Native weight experiment</span>
+        <span class="fig-title">Calibrated INT3 stays near the baseline; uniform INT3 collapses</span>
+      </figcaption>
+      <div class="legend">
+        <span><i class="dot good-dot"></i>best calibrated native W3A8</span>
+        <span><i class="dot bad-dot"></i>native uniform W3A8</span>
+      </div>
+      <div class="ratio-chart">
+        <div class="ratio-row">
+          <div class="ratio-model">Qwen3-4B</div>
+          <div class="ratio-bars">
+            <div class="track"><div class="fill good-bar" style="width:5%">1.22×</div></div>
+            <div class="track"><div class="fill bad-bar" style="width:20%">9.70×</div></div>
+          </div>
+        </div>
+        <div class="ratio-row">
+          <div class="ratio-model">Gemma4-12B</div>
+          <div class="ratio-bars">
+            <div class="track"><div class="fill good-bar" style="width:5%">1.21×</div></div>
+            <div class="track"><div class="fill bad-bar" style="width:63%">1,554×</div></div>
+          </div>
+        </div>
+        <div class="ratio-row">
+          <div class="ratio-model">MiniMax-M3 experts</div>
+          <div class="ratio-bars">
+            <div class="track"><div class="fill good-bar" style="width:5%">1.15×</div></div>
+            <div class="track"><div class="fill bad-bar" style="width:100%">120,765×</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="axis"><span>1× BF16 PPL</span><span>log-scale degradation →</span><span>100,000×</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Model · 8K WikiText-2</th>
+              <th>BF16 PPL / KL₅₀</th>
+              <th>Calibrated native W3A8</th>
+              <th>Native uniform W3A8</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Qwen3-4B</td>
+              <td>9.447 / 0</td>
+              <td class="good">11.538 / 0.23758</td>
+              <td class="bad">91.618 / 2.26101</td>
+            </tr>
+            <tr>
+              <td>Gemma4-12B</td>
+              <td>6.479 / 0</td>
+              <td class="good">7.842 / 0.36278</td>
+              <td class="bad">10,070.909 / 7.32568</td>
+            </tr>
+            <tr>
+              <td>MiniMax-M3 routed experts</td>
+              <td>5.303 / 0</td>
+              <td class="good">6.124 / 0.30928</td>
+              <td class="bad">640,419 / 12.17143</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </figure>
+    <p class="note">
       Every reported quantized GEMM above runs through the native Rubin LUT-B MMA.
     </p>
     <p class="result">Result: 3-bit weights are viable, but a naive codebook can be orders of magnitude worse.</p>
@@ -167,34 +334,48 @@
   <section>
     <h2>Experiment 2 — 3-bit KV cache</h2>
     <p class="question">Can Qwen3-4B use a native K3V3 cache without losing the model?</p>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>KV method · 8K WikiText-2</th>
-            <th>PPL</th>
-            <th>KL₅₀</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>BF16 KV</td>
-            <td>9.468</td>
-            <td>0</td>
-          </tr>
-          <tr>
-            <td>Calibrated native K3V3</td>
-            <td class="good">10.288</td>
-            <td class="good">0.07723</td>
-          </tr>
-          <tr>
-            <td>Uniform native K3V3</td>
-            <td class="bad">1,245.744</td>
-            <td class="bad">5.13651</td>
-          </tr>
-        </tbody>
-      </table>
+    <div class="algo-grid">
+      <div class="algo">
+        <b>Write the cache once.</b>
+        Fit a per-layer eight-value Lloyd–Max codebook offline. Keep sink and recent tokens in BF16;
+        seal older K/V in 64-token chunks as 3-bit indices, LUT values, and scales.
+      </div>
+      <div class="algo">
+        <b>Read it twice through LUT-B.</b>
+        E4M3 Q multiplies compressed Kᵀ, softmax max/sum/normalization remains FP32,
+        and E4M3 P multiplies compressed V. Kᵀ and V are both matrix B, so Rubin decompresses them inside the MMA.
+      </div>
     </div>
+    <figure>
+      <figcaption>
+        <span class="fig-label">Figure 2 · Native KV experiment</span>
+        <span class="fig-title">A fitted codebook keeps K3V3 usable; uniform levels do not</span>
+      </figcaption>
+      <div class="kv-story">
+        <div class="kv-box"><span>BF16 KV</span><b>9.468</b><small>PPL · KL₅₀ 0</small></div>
+        <div class="arrow">→</div>
+        <div class="kv-box good-box"><span>Calibrated K3V3</span><b>10.288</b><small>PPL · KL₅₀ 0.07723</small></div>
+        <div class="arrow">vs</div>
+        <div class="kv-box bad-box"><span>Uniform K3V3</span><b>1,245.744</b><small>PPL · KL₅₀ 5.13651</small></div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>KV method · 8K WikiText-2</th>
+              <th>PPL</th>
+              <th>KL₅₀</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>BF16 KV</td><td>9.468</td><td>0</td></tr>
+            <tr><td>Calibrated native K3V3</td><td class="good">10.288</td><td class="good">0.07723</td></tr>
+            <tr><td>OSCAR + calibrated native K3V3</td><td>10.359</td><td>0.13881</td></tr>
+            <tr><td>Uniform native K3V3</td><td class="bad">1,245.744</td><td class="bad">5.13651</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </figure>
     <p class="result">
       Result: from PPL, 3-bit KV is practical when the codebook and scale are controlled.
       Uniform INT3 is not a usable baseline.
