@@ -100,6 +100,59 @@
       color: #49463e;
       font-size: 14px;
     }
+    .primitive {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .primitive > div {
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbf8ef;
+    }
+    .primitive b { display: block; color: var(--green); margin-bottom: 5px; }
+    .equation {
+      margin: 17px 0;
+      padding: 17px;
+      overflow-x: auto;
+      border-radius: 8px;
+      background: #242a27;
+      color: #f0f4ef;
+      font: 14px/1.7 "SFMono-Regular", Consolas, monospace;
+      white-space: nowrap;
+    }
+    .kernel-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .kernel-step {
+      padding: 14px 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbf8ef;
+      font-size: 14px;
+    }
+    .kernel-step b { color: var(--green); }
+    figure.original {
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .iframe-shell {
+      margin-top: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: var(--paper);
+    }
+    .figure-frame {
+      display: block;
+      width: 100%;
+      height: 760px;
+      border: 0;
+      background: var(--paper);
+    }
+    .figure-frame.kv-frame { height: 1020px; }
+    .embed-note { margin: 8px 2px 0; color: var(--muted); font-size: 12px; }
     .algo-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 14px 0 18px; }
     .algo {
       padding: 14px 15px;
@@ -193,11 +246,14 @@
       .proof { grid-template-columns: 1fr; }
       .mechanism { grid-template-columns: 1fr; }
       .mechanism .step:not(:last-child)::after { content: "↓"; top: auto; bottom: -14px; right: 50%; transform: translateX(50%); }
+      .primitive, .kernel-grid { grid-template-columns: 1fr; }
       .algo-grid { grid-template-columns: 1fr; }
       .ratio-row { grid-template-columns: 1fr; gap: 5px; }
       .axis { margin-left: 0; }
       .kv-story { grid-template-columns: 1fr; }
       .arrow { transform: rotate(90deg); justify-self: center; }
+      .figure-frame { height: 1600px; }
+      .figure-frame.kv-frame { height: 2100px; }
       th, td { padding: 9px 7px; }
     }
   </style>
@@ -219,11 +275,23 @@
   </header>
 
   <section>
-    <h2>What the algorithm actually does</h2>
+    <h2>Rubin LUT-B and our algorithm</h2>
     <p class="question">
-      LUT-B is a compressed matrix-B format, not ordinary integer arithmetic.
-      We turn each weight or cached K/V tile into a small programmable lookup table.
+      The “B” in LUT-B means <em>matrix operand B</em>, not bit width.
+      Rubin keeps A as an E4M3 matrix and reconstructs compressed B inside the tensor-core MMA.
     </p>
+    <div class="primitive">
+      <div>
+        <b>What Rubin provides</b>
+        A native <code>decompress::lut::b</code> MMA. Each 3-bit index selects one of eight E4M3 values
+        held in tensor memory, so there is no separate dequantization kernel and no dense B tensor.
+      </div>
+      <div>
+        <b>What we provide</b>
+        The offline quantizer that chooses the eight values, the index of every element, and the scale layout;
+        plus the runtime mapping that makes model weights or cached K/V the compressed B operand.
+      </div>
+    </div>
     <div class="mechanism">
       <div class="step"><b>1 · Condition</b>Optionally rotate or rescale the tensor to reduce outliers.</div>
       <div class="step"><b>2 · Fit</b>Learn eight E4M3 reconstruction values for each tile.</div>
@@ -236,6 +304,43 @@
       and scale metadata: about <strong>3.2 bits per weight</strong>. No dense BF16 weight is materialized
       in the native path.
     </div>
+  </section>
+
+  <section>
+    <h2>How the kernel computes the product</h2>
+    <p class="question">
+      The kernel computes the normal product Y = A·B, but B is reconstructed from the payload only inside each MMA.
+    </p>
+    <div class="equation">
+      B̂[k,n] = global × scaleB[t,n] × LUT[t][index[k,n]]<br>
+      Y[m,n] = Σₜ Dₜ[m,n] × scaleA[m,t] × scaleB[t,n] × global
+    </div>
+    <div class="kernel-grid">
+      <div class="kernel-step">
+        <b>1 · Tile the GEMM.</b>
+        One 128-thread CTA owns an M128×N8 output tile and walks K in 64-element segments.
+        Activations are quantized per row/K block to E4M3 plus a UE8M0 scale.
+      </div>
+      <div class="kernel-step">
+        <b>2 · Stage the payload.</b>
+        The 3-bit indices are rearranged into the 256-byte shared-memory image expected by the instruction.
+        The corresponding eight-value LUT and A fragment are staged in tensor memory.
+      </div>
+      <div class="kernel-step">
+        <b>3 · Issue native LUT-B.</b>
+        The kernel executes <code>tcgen05.mma…decompress::lut::b</code>.
+        Hardware looks up B and accumulates an FP32 partial D; an mbarrier prevents reading D before the MMA completes.
+      </div>
+      <div class="kernel-step">
+        <b>4 · Apply scales.</b>
+        The epilogue multiplies each partial by activation scale, weight scale, and the folded global scale.
+        A two-K32 recipe uses two masked K64 passes because direct K32 LUT-B is not legal on this instruction.
+      </div>
+    </div>
+    <p class="note">
+      Integration is direct: Qwen/Gemma replace text <code>nn.Linear</code> calls; MiniMax replaces routed-expert
+      W13/W2 GEMMs; KV attention maps compressed Kᵀ and V to B in the QK and PV contractions.
+    </p>
   </section>
 
   <section>
@@ -259,71 +364,20 @@
       SqueezeLLM is a separate variant: it weights the same codebook fit with diagonal Fisher information.
       It does not perform GPTQ's sequential error compensation unless the two methods are explicitly combined.
     </p>
-    <figure>
+    <figure class="original">
       <figcaption>
-        <span class="fig-label">Figure 1 · Native weight experiment</span>
-        <span class="fig-title">Calibrated INT3 stays near the baseline; uniform INT3 collapses</span>
+        <span class="fig-label">Figure 1 · Original interactive weight explorer</span>
+        <span class="fig-title">Switch model, context, method, simulation, native Rubin runs, and MiniMax prod-KL</span>
       </figcaption>
-      <div class="legend">
-        <span><i class="dot good-dot"></i>best calibrated native W3A8</span>
-        <span><i class="dot bad-dot"></i>native uniform W3A8</span>
+      <div class="iframe-shell">
+        <iframe
+          class="figure-frame"
+          title="Original interactive Figure 1: weight quantization"
+          src="https://www.zhongzhuzhou.org/rubin-k3v3/?embed=weight"
+          loading="eager">
+        </iframe>
       </div>
-      <div class="ratio-chart">
-        <div class="ratio-row">
-          <div class="ratio-model">Qwen3-4B</div>
-          <div class="ratio-bars">
-            <div class="track"><div class="fill good-bar" style="width:5%">1.22×</div></div>
-            <div class="track"><div class="fill bad-bar" style="width:20%">9.70×</div></div>
-          </div>
-        </div>
-        <div class="ratio-row">
-          <div class="ratio-model">Gemma4-12B</div>
-          <div class="ratio-bars">
-            <div class="track"><div class="fill good-bar" style="width:5%">1.21×</div></div>
-            <div class="track"><div class="fill bad-bar" style="width:63%">1,554×</div></div>
-          </div>
-        </div>
-        <div class="ratio-row">
-          <div class="ratio-model">MiniMax-M3 experts</div>
-          <div class="ratio-bars">
-            <div class="track"><div class="fill good-bar" style="width:5%">1.15×</div></div>
-            <div class="track"><div class="fill bad-bar" style="width:100%">120,765×</div></div>
-          </div>
-        </div>
-      </div>
-      <div class="axis"><span>1× BF16 PPL</span><span>log-scale degradation →</span><span>100,000×</span></div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Model · 8K WikiText-2</th>
-              <th>BF16 PPL / KL₅₀</th>
-              <th>Calibrated native W3A8</th>
-              <th>Native uniform W3A8</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Qwen3-4B</td>
-              <td>9.447 / 0</td>
-              <td class="good">11.538 / 0.23758</td>
-              <td class="bad">91.618 / 2.26101</td>
-            </tr>
-            <tr>
-              <td>Gemma4-12B</td>
-              <td>6.479 / 0</td>
-              <td class="good">7.842 / 0.36278</td>
-              <td class="bad">10,070.909 / 7.32568</td>
-            </tr>
-            <tr>
-              <td>MiniMax-M3 routed experts</td>
-              <td>5.303 / 0</td>
-              <td class="good">6.124 / 0.30928</td>
-              <td class="bad">640,419 / 12.17143</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <p class="embed-note">This is the original Figure 1 from the full report; both pages share the same live data.</p>
     </figure>
     <p class="note">
       Every reported quantized GEMM above runs through the native Rubin LUT-B MMA.
@@ -346,35 +400,20 @@
         and E4M3 P multiplies compressed V. Kᵀ and V are both matrix B, so Rubin decompresses them inside the MMA.
       </div>
     </div>
-    <figure>
+    <figure class="original">
       <figcaption>
-        <span class="fig-label">Figure 2 · Native KV experiment</span>
-        <span class="fig-title">A fitted codebook keeps K3V3 usable; uniform levels do not</span>
+        <span class="fig-label">Figure 2 · Original interactive KV explorer</span>
+        <span class="fig-title">Compare BF16, uniform, Lloyd–Max, OSCAR, simulation, native accuracy, and the KV roofline</span>
       </figcaption>
-      <div class="kv-story">
-        <div class="kv-box"><span>BF16 KV</span><b>9.468</b><small>PPL · KL₅₀ 0</small></div>
-        <div class="arrow">→</div>
-        <div class="kv-box good-box"><span>Calibrated K3V3</span><b>10.288</b><small>PPL · KL₅₀ 0.07723</small></div>
-        <div class="arrow">vs</div>
-        <div class="kv-box bad-box"><span>Uniform K3V3</span><b>1,245.744</b><small>PPL · KL₅₀ 5.13651</small></div>
+      <div class="iframe-shell">
+        <iframe
+          class="figure-frame kv-frame"
+          title="Original interactive Figure 2: KV cache quantization"
+          src="https://www.zhongzhuzhou.org/rubin-k3v3/?embed=kv"
+          loading="lazy">
+        </iframe>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>KV method · 8K WikiText-2</th>
-              <th>PPL</th>
-              <th>KL₅₀</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr><td>BF16 KV</td><td>9.468</td><td>0</td></tr>
-            <tr><td>Calibrated native K3V3</td><td class="good">10.288</td><td class="good">0.07723</td></tr>
-            <tr><td>OSCAR + calibrated native K3V3</td><td>10.359</td><td>0.13881</td></tr>
-            <tr><td>Uniform native K3V3</td><td class="bad">1,245.744</td><td class="bad">5.13651</td></tr>
-          </tbody>
-        </table>
-      </div>
+      <p class="embed-note">This is the original Figure 2 from the full report; interactions and data updates are shared.</p>
     </figure>
     <p class="result">
       Result: from PPL, 3-bit KV is practical when the codebook and scale are controlled.
@@ -414,5 +453,21 @@
     <a href="https://www.zhongzhuzhou.org/rubin-k3v3/">technical report</a>.
   </footer>
 </main>
+<script>
+  document.querySelectorAll(".figure-frame").forEach((frame) => {
+    frame.addEventListener("load", () => {
+      try {
+        const doc = frame.contentDocument;
+        const resize = () => {
+          frame.style.height = Math.ceil(doc.documentElement.scrollHeight) + "px";
+        };
+        new ResizeObserver(resize).observe(doc.body);
+        resize();
+      } catch (_) {
+        // The fixed CSS height remains as a fallback outside the production origin.
+      }
+    });
+  });
+</script>
 </body>
 </html>
