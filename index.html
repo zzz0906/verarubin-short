@@ -66,6 +66,12 @@
       font-size: 27px;
       line-height: 1.25;
     }
+    h3 {
+      margin: 24px 0 6px;
+      font-family: Georgia, "Times New Roman", serif;
+      font-size: 21px;
+      line-height: 1.3;
+    }
     .question { margin: 0 0 18px; color: var(--muted); }
     .mechanism {
       display: grid;
@@ -229,6 +235,10 @@
       border-top: 1px solid var(--line);
       font-weight: 650;
     }
+    .perf-note { color: var(--muted); font-size: 13px; margin: 10px 0 18px; }
+    .conclusions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 18px; }
+    .conclusions div { padding: 16px; border-radius: 8px; background: #eef5ef; border-left: 4px solid var(--green); }
+    .conclusions b { display: block; color: var(--green); margin-bottom: 4px; }
     code {
       padding: 1px 5px;
       border-radius: 4px;
@@ -249,6 +259,7 @@
       .mechanism { grid-template-columns: 1fr; }
       .mechanism .step:not(:last-child)::after { content: "↓"; top: auto; bottom: -14px; right: 50%; transform: translateX(50%); }
       .primitive, .kernel-grid { grid-template-columns: 1fr; }
+      .conclusions { grid-template-columns: 1fr; }
       .algo-grid { grid-template-columns: 1fr; }
       .ratio-row { grid-template-columns: 1fr; gap: 5px; }
       .axis { margin-left: 0; }
@@ -307,10 +318,8 @@
       and scale metadata: about <strong>3.2 bits per weight</strong>. No dense BF16 weight is materialized
       in the native path.
     </div>
-  </section>
 
-  <section>
-    <h2>How the kernel computes the product</h2>
+    <h3>How the kernel computes the product</h3>
     <p class="question">
       The kernel computes the normal product Y = A·B, but B is reconstructed from the payload only inside each MMA.
     </p>
@@ -344,28 +353,38 @@
       Integration is direct: Qwen/Gemma replace text <code>nn.Linear</code> calls; MiniMax replaces routed-expert
       W13/W2 GEMMs; KV attention maps compressed Kᵀ and V to B in the QK and PV contractions.
     </p>
+
+    <h3>What makes this kernel difficult</h3>
+    <div class="kernel-grid">
+      <div class="kernel-step">
+        <b>B-only decompression.</b>
+        The compressed matrix must be operand B. This constrains the attention schedule:
+        Q×Kᵀ and P×V are legal, while schedules that place long K/V in A cannot use LUT-B directly.
+      </div>
+      <div class="kernel-step">
+        <b>Scale placement.</b>
+        Activation and weight scales vary by tile. Our correctness kernel reads each FP32 partial back before
+        applying scales, so partials cannot remain in tensor memory across the whole K loop.
+      </div>
+      <div class="kernel-step">
+        <b>Small-M utilization.</b>
+        The native M tile has 128 rows. Batch-1 decode or a sparsely routed expert may provide only a few live rows,
+        so production performance requires batching, expert gathering, or a persistent schedule.
+      </div>
+      <div class="kernel-step">
+        <b>Two-K32 and synchronization.</b>
+        Fine K32 scales require two masked K64 passes. TMEM stores, MMA, mbarrier completion, and FP32 reads must
+        also be ordered correctly; the current MiniMax accuracy path uses launch blocking for determinism.
+      </div>
+    </div>
   </section>
 
   <section>
     <h2>Experiment 1 — 3-bit weights</h2>
-    <p class="question">Does native W3A8 preserve language-model quality across three architectures?</p>
-    <div class="algo-grid">
-      <div class="algo">
-        <b>Qwen and Gemma: H64 + GPTQ.</b>
-        A signed K64 Hadamard rotation spreads weight outliers. Lloyd–Max fits the eight LUT values;
-        GPTQ uses a block Hessian to push each quantization error into columns not yet quantized.
-        The matching H64 transform is applied to A at runtime.
-      </div>
-      <div class="algo">
-        <b>MiniMax: RMS²-weighted Lloyd–Max.</b>
-        Each centroid fit weights a channel by its calibrated activation second moment.
-        Two independently scaled K32 halves plus one tensor-global scale handle local dynamic range.
-        Only routed-expert W13/W2 matrices are quantized.
-      </div>
-    </div>
-    <p class="note">
-      SqueezeLLM is a separate variant: it weights the same codebook fit with diagonal Fisher information.
-      It does not perform GPTQ's sequential error compensation unless the two methods are explicitly combined.
+    <p class="question">
+      We compare <strong>17 quantized configurations</strong> plus BF16 and A8 baselines,
+      across Qwen3-4B, Gemma4-12B, and MiniMax-M3 at 8K, 64K, and 128K.
+      The question is whether algorithm choice can make native W3A8 usable.
     </p>
     <figure class="original">
       <figcaption>
@@ -382,6 +401,30 @@
       </div>
       <p class="embed-note">This is the original Figure 1 from the full report; both pages share the same live data.</p>
     </figure>
+
+    <h3>What the compared algorithms do</h3>
+    <div class="algo-grid">
+      <div class="algo">
+        <b>Lloyd–Max / uniform / NF3.</b>
+        Uniform spaces eight levels evenly; NF3 uses a fixed normal-inspired codebook;
+        Lloyd–Max learns eight centroids from each tile. This isolates whether fitting the codebook matters.
+      </div>
+      <div class="algo">
+        <b>RMS² / SqueezeLLM.</b>
+        RMS² weights reconstruction error by activation second moments.
+        SqueezeLLM instead uses diagonal Fisher information. Both change the codebook fit; neither is GPTQ compensation.
+      </div>
+      <div class="algo">
+        <b>GPTQ / inter-GPTQ.</b>
+        GPTQ uses a block Hessian to push each rounding error into columns not yet quantized.
+        Inter-GPTQ alternates this compensation sweep with refitting the eight-value codebook.
+      </div>
+      <div class="algo">
+        <b>H64 / AWQ / scale variants.</b>
+        H64 spreads outliers with a signed Hadamard transform and applies the matching transform to A.
+        AWQ rescales activation channels and folds the inverse scale into weights; K64/two-K32/global variants change scale granularity.
+      </div>
+    </div>
     <p class="note">
       Every reported quantized GEMM above runs through the native Rubin LUT-B MMA.
     </p>
@@ -390,19 +433,11 @@
 
   <section>
     <h2>Experiment 2 — 3-bit KV cache</h2>
-    <p class="question">Can Qwen3-4B use a native K3V3 cache without losing the model?</p>
-    <div class="algo-grid">
-      <div class="algo">
-        <b>Write the cache once.</b>
-        Fit a per-layer eight-value Lloyd–Max codebook offline. Keep sink and recent tokens in BF16;
-        seal older K/V in 64-token chunks as 3-bit indices, LUT values, and scales.
-      </div>
-      <div class="algo">
-        <b>Read it twice through LUT-B.</b>
-        E4M3 Q multiplies compressed Kᵀ, softmax max/sum/normalization remains FP32,
-        and E4M3 P multiplies compressed V. Kᵀ and V are both matrix B, so Rubin decompresses them inside the MMA.
-      </div>
-    </div>
+    <p class="question">
+      Figure 2 compares five Qwen KV configurations (BF16 plus four compressed recipes)
+      and three Kimi latent-cache configurations. It asks whether a fitted codebook and controlled scales
+      can make native K3V3 accurate while reducing cache traffic.
+    </p>
     <figure class="original">
       <figcaption>
         <span class="fig-label">Figure 2 · Original interactive KV explorer</span>
@@ -418,10 +453,127 @@
       </div>
       <p class="embed-note">This is the original Figure 2 from the full report; interactions and data updates are shared.</p>
     </figure>
+
+    <h3>What the KV algorithms do</h3>
+    <div class="algo-grid">
+      <div class="algo">
+        <b>Window and sealing.</b>
+        Sink and recent tokens remain BF16. Older K/V are sealed once in 64-token chunks as
+        3-bit indices, layer-specific LUT values, and scales; decode never writes them again.
+      </div>
+      <div class="algo">
+        <b>Lloyd–Max codebooks.</b>
+        Each layer learns eight non-uniform values from calibration data, placing resolution where K/V values occur.
+        Uniform levels waste codes on sparse tails and collapse PPL.
+      </div>
+      <div class="algo">
+        <b>OSCAR.</b>
+        A calibrated rotation and clipping rule spreads outliers before fitting the codebook.
+        It can improve some models, but adds transforms unless they are absorbed into adjacent projections.
+      </div>
+      <div class="algo">
+        <b>Native attention path.</b>
+        E4M3 Q multiplies compressed Kᵀ; max, exp, sum, and normalization stay FP32;
+        E4M3 P then multiplies compressed V. Both cache reads use B-side LUT decompression.
+      </div>
+    </div>
     <p class="result">
       Result: from PPL, 3-bit KV is practical when the codebook and scale are controlled.
       Uniform INT3 is not a usable baseline.
     </p>
+  </section>
+
+  <section>
+    <h2>What speedup could W3A8 and K3V3 enable?</h2>
+    <p class="question">
+      These are kernel roofline estimates, not end-to-end serving measurements.
+      They separate the benefit of moving fewer bytes from the online cost of the more elaborate accuracy methods.
+    </p>
+
+    <h3>W3A8 weight-GEMM estimate</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Native weight path</th>
+            <th>Payload</th>
+            <th>Extra online work</th>
+            <th>Kernel implication</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>One-pass K64 LUT-B</td>
+            <td>3.25 bit/W</td>
+            <td>None beyond A8 quantization</td>
+            <td class="good">2.49–4.35× Rubin BF16; 16.3–28.6× H100 BF16 at 40–70% LUT-B rate</td>
+          </tr>
+          <tr>
+            <td>LM / RMS² / GPTQ / SqueezeLLM / inter-GPTQ</td>
+            <td>Same K64 payload</td>
+            <td>Codebook, Fisher, and Hessian work is offline</td>
+            <td>Same one-pass envelope; byte ceilings are 4.92× Rubin and 32.3× H100</td>
+          </tr>
+          <tr>
+            <td>H64 + K64</td>
+            <td>3.25 bit/W</td>
+            <td>Signed H64 transform on A</td>
+            <td>Base envelope minus the transform cost; often buys the largest accuracy gain</td>
+          </tr>
+          <tr>
+            <td>Two-K32 scale oracle</td>
+            <td>3.375 bit/W</td>
+            <td>Two masked K64 MMA passes</td>
+            <td>2× MMA issue; ≈10% wall-clock premium in the current native evaluation</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="perf-note">
+      Folded AWQ and a tensor-global scale add no extra GEMM pass when the fold is supported.
+      The current correctness kernel is not optimized, so the table describes the attainable kernel envelope rather than its present wall clock.
+    </p>
+
+    <h3>K3V3 attention estimate at 1M context</h3>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Qwen3-4B attention path</th>
+            <th>KV / request</th>
+            <th>Attention-only tok/s</th>
+            <th>vs H100 BF16</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>H100 · BF16 KV</td><td>154.6 GB</td><td>21.7</td><td>1.00×</td></tr>
+          <tr><td>Rubin · BF16 KV</td><td>154.6 GB</td><td>142.3</td><td>6.57×</td></tr>
+          <tr><td>Rubin · K3V3, LUT-B rate 40%</td><td>30.2 GB</td><td class="good">353.7</td><td class="good">16.3×</td></tr>
+          <tr><td>Rubin · K3V3, LUT-B rate 55%</td><td>30.2 GB</td><td class="good">486.3</td><td class="good">22.4×</td></tr>
+          <tr><td>Rubin · K3V3, LUT-B rate 70%</td><td>30.2 GB</td><td class="good">619.0</td><td class="good">28.6×</td></tr>
+          <tr><td>Rubin · K3V3 byte ceiling</td><td>30.2 GB</td><td>727.6</td><td>33.6×</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="perf-note">
+      Qwen3-4B, 36 layers, GQA4, attention only. The model includes a 320-token BF16 sink/recent window,
+      so the effective 1M cache uses 3.129 bit/value rather than exactly 3.125.
+      The estimates exclude model weights, MLP, sampling, communication, and scheduling.
+      Lloyd–Max is offline; OSCAR adds rotation/clipping unless absorbed into neighbouring projections.
+    </p>
+
+    <div class="conclusions">
+      <div>
+        <b>Conclusion 1 · W3A8</b>
+        Most “fancy” quality methods are offline and preserve the one-pass K64 kernel.
+        H64 pays an A transform; two-K32 pays a second MMA pass.
+      </div>
+      <div>
+        <b>Conclusion 2 · K3V3</b>
+        A fitted codebook and controlled scales can cut a 1M KV cache from 154.6 GB to 30.2 GB.
+        Actual speed then depends on LUT-B rate and small-M scheduling, not on another dequantization pass.
+      </div>
+    </div>
   </section>
 
   <section>
