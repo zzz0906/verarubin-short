@@ -194,6 +194,24 @@ section > ul > li > strong:first-child {
   color: var(--green);
 }
 
+section > ol.plain-references {
+  display: block;
+  padding-left: 24px;
+  list-style: decimal;
+  counter-reset: none;
+}
+
+section > ol.plain-references > li {
+  display: list-item;
+  margin: 7px 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+section > ol.plain-references > li::before { content: none; }
+
 code {
   padding: 1px 5px;
   border-radius: 4px;
@@ -592,7 +610,7 @@ s_A[m,h]\,s_B[n,h],
 <p><strong>Conclusion 2 — K3V3.</strong> A fitted codebook and controlled scales can cut a 1M KV cache from 154.6 GB to 30.2 GB. Actual speed then depends on LUT-B rate and small-M scheduling, not on another dequantization pass.</p>
 </blockquote>
 </section><section><h2>References and implementation</h2>
-<ol>
+<ol class="plain-references">
 <li>J. Max, <a href="https://doi.org/10.1109/TIT.1960.1057548">“Quantizing for Minimum Distortion”</a>, 1960.</li>
 <li>S. P. Lloyd, <a href="https://doi.org/10.1109/TIT.1982.1056489">“Least Squares Quantization in PCM”</a>, 1982.</li>
 <li>E. Frantar et al., <a href="https://arxiv.org/abs/2210.17323">“GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers”</a>, ICLR 2023.</li>
