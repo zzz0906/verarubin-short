@@ -50,102 +50,87 @@
   </defs>
 
   <rect x="0" y="0" width="1600" height="900" rx="28" fill="url(#bg)"/>
-  <text x="48" y="54" class="title">W3A8 on Rubin LUT-B: build once offline, execute every linear with lookup MMA</text>
-  <text x="48" y="86" class="subtitle">Violet = physical 3-bit LUT-B payload or native MMA | Gold = optional conditioning/scale metadata | Gray = standard precision</text>
+  <text x="48" y="54" class="title">W3A8 on Rubin LUT-B</text>
+  <text x="48" y="86" class="subtitle">Offline payload construction | Dense and routed runtime paths</text>
 
   <!-- Offline payload construction -->
   <rect x="44" y="110" width="1512" height="230" rx="20" fill="#fffdf6" stroke="#cfc8b2" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="70" y="144" class="band-title">OFFLINE &#8212; convert each static W[N,K] into a reusable B = W^T payload</text>
+  <text x="70" y="144" class="band-title">OFFLINE &#8212; build one payload per weight matrix</text>
 
   <rect x="70" y="178" width="190" height="78" rx="13" class="nbox2"/>
-  <text x="165" y="207" class="label" text-anchor="middle">BF16 / FP16 W</text>
-  <text x="165" y="231" class="small" text-anchor="middle">dense source tensor</text>
+  <text x="165" y="221" class="label" text-anchor="middle">BF16 / FP16 W</text>
   <path d="M260 217 H310" class="line"/>
 
   <rect x="311" y="172" width="250" height="90" rx="14" fill="#f3edd9" stroke="#a97f19" stroke-width="1.6"/>
-  <text x="436" y="203" class="glabel" text-anchor="middle">optional conditioning</text>
-  <text x="436" y="227" class="small" text-anchor="middle">H64 rotation or folded AWQ</text>
-  <text x="436" y="247" class="gtiny" text-anchor="middle">reduce outliers before fitting</text>
+  <text x="436" y="209" class="glabel" text-anchor="middle">optional H64 / AWQ</text>
+  <text x="436" y="236" class="small" text-anchor="middle">condition outliers</text>
   <path d="M561 217 H611" class="line"/>
 
   <rect x="612" y="162" width="330" height="110" rx="15" class="nbox"/>
-  <text x="777" y="193" class="label" text-anchor="middle">fit one 8-value E4M3 LUT / tile</text>
-  <text x="777" y="218" class="small" text-anchor="middle">Lloyd-Max &#183; RMS^2 &#183; Fisher / SqueezeLLM</text>
-  <text x="777" y="241" class="small" text-anchor="middle">GPTQ compensation &#183; inter-GPTQ refits</text>
-  <text x="777" y="260" class="tiny" text-anchor="middle">method choice changes accuracy, not the 3-bit index format</text>
+  <text x="777" y="203" class="label" text-anchor="middle">fit 8-value E4M3 LUT</text>
+  <text x="777" y="232" class="small" text-anchor="middle">LM &#183; RMS^2 &#183; Fisher &#183; GPTQ</text>
   <path d="M942 217 H992" class="purple-line"/>
 
   <rect x="993" y="156" width="530" height="122" rx="16" class="vbox"/>
-  <text x="1258" y="187" class="vlabel" text-anchor="middle">physical LUT-B weight payload</text>
-  <text x="1258" y="213" class="vsmall" text-anchor="middle">192 B indices + 8 B LUT + scale metadata per K64 x N8 tile</text>
-  <text x="1258" y="238" class="vsmall" text-anchor="middle">K64: 3.25 bit/W &#183; two-K32 reference: 3.375 bit/W</text>
-  <text x="1258" y="260" class="vtiny" text-anchor="middle">optional one-FP32 global factor / tensor &#183; no dense W at runtime</text>
+  <text x="1258" y="195" class="vlabel" text-anchor="middle">3-bit W payload</text>
+  <text x="1258" y="224" class="vsmall" text-anchor="middle">indices + LUT + scales</text>
+  <text x="1258" y="251" class="vtiny" text-anchor="middle">3.25 bit/W (K64)</text>
 
   <rect x="311" y="292" width="1212" height="30" rx="8" fill="#f8f3e4" stroke="#d6c99e"/>
-  <text x="917" y="312" class="gtiny" text-anchor="middle">Scale choices: K64 row scale | K32-half scale | separable block32 row-scale x column-scale | optional tensor-global factor</text>
+  <text x="917" y="312" class="gtiny" text-anchor="middle">K64 scale &#183; K32-half scale &#183; optional global</text>
 
   <!-- Dense panel -->
   <rect x="44" y="370" width="736" height="422" rx="22" fill="#fffdf6" stroke="#cfc8b2" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="72" y="408" class="panel-title">Dense Qwen / Gemma &#8212; one payload per text linear</text>
-  <text x="72" y="434" class="small">QKV, output, gate/up, and down projections are replaced by native LUT-B linears</text>
+  <text x="72" y="414" class="panel-title">Dense linears &#8212; Qwen / Gemma</text>
 
   <rect x="72" y="472" width="156" height="66" rx="12" class="nbox2"/>
-  <text x="150" y="499" class="label" text-anchor="middle">BF16 activation</text>
-  <text x="150" y="521" class="tiny" text-anchor="middle">one token row or prefill batch</text>
+  <text x="150" y="513" class="label" text-anchor="middle">BF16 A</text>
   <path d="M228 505 H268" class="line"/>
 
   <rect x="269" y="466" width="174" height="78" rx="13" class="nbox"/>
-  <text x="356" y="494" class="label" text-anchor="middle">quantize A online</text>
-  <text x="356" y="517" class="small" text-anchor="middle">E4M3 + UE8M0</text>
-  <text x="356" y="536" class="tiny" text-anchor="middle">optional matching H64</text>
+  <text x="356" y="500" class="label" text-anchor="middle">A8 online</text>
+  <text x="356" y="526" class="small" text-anchor="middle">E4M3 + scale</text>
   <path d="M443 505 H482" class="line"/>
 
   <rect x="477" y="455" width="254" height="100" rx="16" class="halo"/>
   <rect x="484" y="462" width="240" height="86" rx="13" fill="url(#rubin)"/>
-  <text x="604" y="493" class="mono white" text-anchor="middle">A x LUT-B(W^T)</text>
-  <text x="604" y="518" class="small white" text-anchor="middle">UTCQMMA.LUTB</text>
-  <text x="604" y="538" class="tiny white" text-anchor="middle">lookup + FP32 accumulation</text>
+  <text x="604" y="500" class="mono white" text-anchor="middle">A x W3</text>
+  <text x="604" y="529" class="small white" text-anchor="middle">LUT-B MMA</text>
 
   <path d="M1070 278 V350 H770 V505 H731" class="purple-line"/>
   <text x="915" y="342" class="vtiny" text-anchor="middle">B: packed W^T payload</text>
 
   <rect x="72" y="590" width="652" height="82" rx="13" class="nbox"/>
-  <text x="398" y="619" class="label" text-anchor="middle">software epilogue or block-scale MMA</text>
-  <text x="398" y="643" class="small" text-anchor="middle">restore A scale x B scale x optional global factor</text>
-  <text x="398" y="662" class="tiny" text-anchor="middle">one-pass K64 target; generic two-K32 reference may use two masked passes</text>
+  <text x="398" y="630" class="label" text-anchor="middle">apply A x B scales</text>
+  <text x="398" y="657" class="small" text-anchor="middle">optional global factor</text>
   <path d="M604 555 V590" class="line"/>
 
   <rect x="72" y="708" width="652" height="58" rx="12" class="nbox2"/>
-  <text x="398" y="733" class="label" text-anchor="middle">FP32/BF16 linear output &#8594; standard model graph</text>
-  <text x="398" y="754" class="small" text-anchor="middle">same payload reused for every token</text>
+  <text x="398" y="745" class="label" text-anchor="middle">linear output</text>
   <path d="M398 672 V708" class="line"/>
 
   <!-- MoE panel -->
   <rect x="820" y="370" width="736" height="422" rx="22" fill="#fffdf6" stroke="#cfc8b2" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="848" y="408" class="panel-title">MiniMax routed experts &#8212; two LUT-B GEMMs per selected expert</text>
-  <text x="848" y="434" class="small">57 MoE layers &#183; router selects 4 / 128 experts &#183; shared expert stays on the standard path</text>
+  <text x="848" y="408" class="panel-title">Routed experts &#8212; MiniMax</text>
+  <text x="848" y="434" class="small">top 4 / 128 experts</text>
 
   <rect x="848" y="472" width="138" height="66" rx="12" class="nbox2"/>
-  <text x="917" y="499" class="label" text-anchor="middle">hidden states</text>
-  <text x="917" y="521" class="tiny" text-anchor="middle">tokens x hidden dim</text>
+  <text x="917" y="513" class="label" text-anchor="middle">hidden</text>
   <path d="M986 505 H1020" class="line"/>
 
   <rect x="1021" y="466" width="136" height="78" rx="13" class="nbox"/>
-  <text x="1089" y="494" class="label" text-anchor="middle">top-4 router</text>
-  <text x="1089" y="517" class="small" text-anchor="middle">gather by expert</text>
-  <text x="1089" y="536" class="tiny" text-anchor="middle">pad / batch M rows</text>
+  <text x="1089" y="500" class="label" text-anchor="middle">route top-4</text>
+  <text x="1089" y="526" class="small" text-anchor="middle">gather tokens</text>
   <path d="M1157 505 H1187" class="line"/>
 
   <rect x="1182" y="455" width="166" height="100" rx="16" class="halo"/>
   <rect x="1189" y="462" width="152" height="86" rx="13" fill="url(#rubin)"/>
-  <text x="1265" y="493" class="label white" text-anchor="middle">A x W13^T</text>
-  <text x="1265" y="518" class="small white" text-anchor="middle">LUT-B MMA 1</text>
-  <text x="1265" y="538" class="tiny white" text-anchor="middle">gate + up payload</text>
+  <text x="1265" y="500" class="label white" text-anchor="middle">A x W13</text>
+  <text x="1265" y="529" class="small white" text-anchor="middle">LUT-B MMA</text>
   <path d="M1348 505 H1380" class="line"/>
 
   <rect x="1381" y="472" width="145" height="66" rx="12" class="nbox"/>
-  <text x="1453" y="499" class="label" text-anchor="middle">SwiGLU</text>
-  <text x="1453" y="521" class="tiny" text-anchor="middle">standard activation</text>
+  <text x="1453" y="513" class="label" text-anchor="middle">SwiGLU</text>
 
   <path d="M1450 278 H1540 V700" class="purple-trunk"/>
   <path d="M1540 574 H1265 V555" class="purple-line"/>
@@ -153,32 +138,30 @@
 
   <rect x="932" y="590" width="190" height="90" rx="16" class="halo"/>
   <rect x="939" y="597" width="176" height="76" rx="13" fill="url(#rubin)"/>
-  <text x="1027" y="626" class="label white" text-anchor="middle">A x W2^T</text>
-  <text x="1027" y="649" class="small white" text-anchor="middle">LUT-B MMA 2</text>
+  <text x="1027" y="630" class="label white" text-anchor="middle">A x W2</text>
+  <text x="1027" y="657" class="small white" text-anchor="middle">LUT-B MMA</text>
   <path d="M1453 538 V572 H1027 V590" class="line"/>
   <path d="M1540 700 H920 V646 H932" class="purple-line"/>
   <text x="1220" y="692" class="vtiny" text-anchor="middle">B: W2 payload</text>
 
   <rect x="1160" y="590" width="366" height="90" rx="13" class="nbox"/>
-  <text x="1343" y="620" class="label" text-anchor="middle">route-weighted scatter + shared expert</text>
-  <text x="1343" y="645" class="small" text-anchor="middle">sum selected expert outputs</text>
-  <text x="1343" y="665" class="tiny" text-anchor="middle">return to the standard residual path</text>
+  <text x="1343" y="630" class="label" text-anchor="middle">weighted scatter</text>
+  <text x="1343" y="657" class="small" text-anchor="middle">+ shared expert</text>
   <path d="M1122 635 H1160" class="line"/>
 
   <rect x="848" y="714" width="678" height="52" rx="12" class="nbox2"/>
-  <text x="1187" y="737" class="label" text-anchor="middle">Accuracy cost comes from codebook, scales, A8, and routing statistics</text>
-  <text x="1187" y="757" class="small" text-anchor="middle">Speed cost comes from small-M utilization and two expert GEMMs</text>
+  <text x="1187" y="747" class="label" text-anchor="middle">quality: codebook + scales &#183; speed: M utilization</text>
 
   <!-- Legend -->
   <rect x="148" y="826" width="1304" height="48" rx="11" fill="#fffdf6" stroke="#cfc8b2"/>
   <rect x="176" y="842" width="16" height="16" rx="4" fill="url(#rubin)"/>
-  <text x="200" y="855" class="tiny">native LUT-B MMA</text>
+  <text x="200" y="855" class="tiny">LUT-B MMA</text>
   <rect x="390" y="842" width="16" height="16" rx="4" fill="url(#payload)" stroke="#7c3aed"/>
-  <text x="414" y="855" class="tiny">physical 3-bit weight payload</text>
+  <text x="414" y="855" class="tiny">3-bit payload</text>
   <rect x="680" y="842" width="16" height="16" rx="4" fill="#f3edd9" stroke="#a97f19"/>
-  <text x="704" y="855" class="tiny">optional conditioning / scale choice</text>
+  <text x="704" y="855" class="tiny">optional transform / scale</text>
   <rect x="1010" y="842" width="16" height="16" rx="4" class="nbox2"/>
-  <text x="1034" y="855" class="tiny">standard-precision operation</text>
+  <text x="1034" y="855" class="tiny">standard operation</text>
   <circle cx="1272" cy="850" r="9" fill="none" stroke="#7c3aed" stroke-width="2" stroke-dasharray="4 3"/>
-  <text x="1290" y="855" class="tiny">where LUT-B executes</text>
+  <text x="1290" y="855" class="tiny">LUT-B execution</text>
 </svg>
