@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
   <title id="title">W3A8 on Rubin LUT-B: offline payload construction and dense or routed runtime execution</title>
-  <desc id="desc">Top band: BF16 weights are conditioned, fitted to an eight-value codebook, and packed as 3-bit LUT-B payloads. Bottom left: dense Qwen and Gemma linear layers multiply E4M3 activations by compressed weights. Bottom right: MiniMax routes tokens through compressed W13 and W2 expert matrices around a standard SwiGLU operation.</desc>
+  <desc id="desc">Top band: BF16 weights are conditioned, fitted to an eight-value codebook, and packed as 3-bit LUT-B payloads. Bottom left: dense Qwen3-4B and Gemma4-12B linear layers multiply E4M3 activations by compressed weights. Bottom right: MiniMax-M3, a 229B mixture-of-experts model, routes tokens through compressed W13 and W2 expert matrices around a standard SwiGLU operation.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#fbf9f1"/>
@@ -81,7 +81,7 @@
 
   <!-- Dense panel -->
   <rect x="44" y="370" width="736" height="422" rx="22" fill="#fffdf6" stroke="#cfc8b2" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="72" y="414" class="panel-title">Dense linears &#8212; Qwen / Gemma</text>
+  <text x="72" y="414" class="panel-title">Dense linears &#8212; Qwen3-4B / Gemma4-12B</text>
 
   <rect x="72" y="472" width="156" height="66" rx="12" class="nbox2"/>
   <text x="150" y="513" class="label" text-anchor="middle">BF16 A</text>
@@ -111,7 +111,7 @@
 
   <!-- MoE panel -->
   <rect x="820" y="370" width="736" height="422" rx="22" fill="#fffdf6" stroke="#cfc8b2" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="848" y="408" class="panel-title">Routed experts &#8212; MiniMax</text>
+  <text x="848" y="408" class="panel-title">Routed experts &#8212; MiniMax-M3 (229B MoE)</text>
   <text x="848" y="434" class="small">top 4 / 128 experts</text>
 
   <rect x="848" y="472" width="138" height="66" rx="12" class="nbox2"/>
