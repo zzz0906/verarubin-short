@@ -150,7 +150,7 @@
   <path d="M1122 635 H1160" class="line"/>
 
   <rect x="848" y="714" width="678" height="52" rx="12" class="nbox2"/>
-  <text x="1187" y="747" class="label" text-anchor="middle">quality: codebook + scales &#183; speed: M utilization</text>
+  <text x="1187" y="747" class="label" text-anchor="middle">quality: codebook + scales &#183; speed: useful rows / 128</text>
 
   <!-- Legend -->
   <rect x="148" y="826" width="1304" height="48" rx="11" fill="#fffdf6" stroke="#cfc8b2"/>
