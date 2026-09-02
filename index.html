@@ -362,6 +362,14 @@ table strong { color: var(--green); }
   margin: 22px 0 24px;
 }
 
+.kv-original-figure {
+  margin-bottom: 0;
+}
+
+.kv-original-figure + h3 {
+  margin-top: 8px;
+}
+
 .original-figure > figcaption {
   margin: 0 0 9px;
   color: var(--gold);
@@ -387,7 +395,7 @@ table strong { color: var(--green); }
   background: var(--paper);
 }
 
-.figure-frame.kv-frame { height: 860px; }
+.figure-frame.kv-frame { height: 1020px; }
 
 footer {
   padding: 12px 3px 0;
@@ -422,19 +430,19 @@ footer {
 }
 
 @media (max-width: 864px) {
-  .figure-frame.kv-frame { height: 1200px; }
+  .figure-frame.kv-frame { height: 1750px; }
 }
 
-@media (max-width: 760px) {
-  .figure-frame.kv-frame { height: 1400px; }
+@media (max-width: 720px) {
+  .figure-frame.kv-frame { height: 2000px; }
 }
 
 @media (max-width: 560px) {
-  .figure-frame.kv-frame { height: 1900px; }
+  .figure-frame.kv-frame { height: 2300px; }
 }
 
 @media (max-width: 440px) {
-  .figure-frame.kv-frame { height: 2450px; }
+  .figure-frame.kv-frame { height: 2700px; }
 }
 
   </style>
@@ -598,7 +606,7 @@ s_B[n,h].
 </section><section><h2>Experiment 2 — 3-bit KV cache</h2>
 <p>Figure 2 compares five Qwen KV configurations (BF16 plus four compressed recipes) and three Kimi latent-cache configurations. It asks whether a fitted codebook and controlled scales can make native K3V3 accurate while reducing cache traffic.</p>
 <p><strong>Real Rubin hardware — native Qwen K3V3 attention.</strong> On the same physical SM107 GPU, completed Qwen native rows stored the compressed cache body as real 3-bit Kᵀ/V payloads. Each attention layer executed E4M3 Q × LUT-B Kᵀ, FP32 softmax, and E4M3 P × LUT-B V without reconstructing the compressed body as dense BF16 in HBM. PPL/KL was measured through the complete Qwen forward pass, including its BF16 sink/recent window. The Kimi K3 points are numerical latent-cache quality runs rather than native Rubin cache measurements; Figure 2's data-source control keeps those evidence classes separate.</p>
-<figure class="original-figure">
+<figure class="original-figure kv-original-figure">
   <figcaption>Figure 2 · Original interactive KV explorer</figcaption>
   <div class="iframe-shell">
     <iframe class="figure-frame kv-frame" title="Figure 2 · Original interactive KV explorer" src="https://www.zhongzhuzhou.org/rubin-k3v3/?embed=kv" loading="lazy"></iframe>
