@@ -387,7 +387,7 @@ table strong { color: var(--green); }
   background: var(--paper);
 }
 
-.figure-frame.kv-frame { height: 1020px; }
+.figure-frame.kv-frame { height: 860px; }
 
 footer {
   padding: 12px 3px 0;
@@ -419,7 +419,22 @@ footer {
     text-transform: uppercase;
   }
   .figure-frame { height: 1600px; }
-  .figure-frame.kv-frame { height: 2100px; }
+}
+
+@media (max-width: 864px) {
+  .figure-frame.kv-frame { height: 1200px; }
+}
+
+@media (max-width: 760px) {
+  .figure-frame.kv-frame { height: 1400px; }
+}
+
+@media (max-width: 560px) {
+  .figure-frame.kv-frame { height: 1900px; }
+}
+
+@media (max-width: 440px) {
+  .figure-frame.kv-frame { height: 2450px; }
 }
 
   </style>
