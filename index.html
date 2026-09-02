@@ -370,6 +370,12 @@ table strong { color: var(--green); }
   margin-top: 8px;
 }
 
+.kv-original-figure .iframe-shell {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
 .original-figure > figcaption {
   margin: 0 0 9px;
   color: var(--gold);
@@ -395,7 +401,7 @@ table strong { color: var(--green); }
   background: var(--paper);
 }
 
-.figure-frame.kv-frame { height: 1008px; }
+.figure-frame.kv-frame { height: 990px; }
 
 footer {
   padding: 12px 3px 0;
@@ -431,6 +437,10 @@ footer {
 
 @media (max-width: 864px) {
   .figure-frame.kv-frame { height: 1750px; }
+}
+
+@media (min-width: 865px) and (max-width: 1100px) {
+  .figure-frame.kv-frame { height: 1020px; }
 }
 
 @media (max-width: 720px) {
